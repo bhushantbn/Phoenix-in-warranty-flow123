@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
   schedule:
     - cron: "30 02 * * 1-5" # 8 am IST
-    - cron: "00 14 * * *"   # 7:30 pm IST
+    - cron: "00 14 * * *" # 7:30 pm IST
 
 jobs:
   run-postman-tests:
@@ -19,36 +19,41 @@ jobs:
       - name: Install Node.js and npm
         uses: actions/setup-node@v3.9.1
         with:
-          node-version: '22'
+          node-version: "22"
 
       - name: Install newman and html extra globally
         run: |
           npm install -g newman
           npm install -g newman-reporter-htmlextra
 
+      - name: Create timestamp for report
+        id: timestamp
+        run: echo "time=$(date +'%Y%m%d-%H%M%S')" >> $GITHUB_OUTPUT
+
       - name: Run Postman Collection with newman
         run: |
+          mkdir -p newman/${{ steps.timestamp.outputs.time }}
           newman run 'Inwarranty-flow Collection.postman_collection.json' \
-          -e QA.postman_environment.json \
-          -d testdata.csv \
-          -r cli,htmlextra \
-          --reporter-htmlextra-export ./newman/index.html
+            -e QA.postman_environment.json \
+            -d testdata.csv \
+            -r cli,htmlextra \
+            --reporter-htmlextra-export ./newman/${{ steps.timestamp.outputs.time }}/index.html
 
-      - name: Newman Report
-        if: always() #Ensures archive is executed irrespective of previous step's result
+      - name: Newman Report Artifact
+        if: always()
         uses: actions/upload-artifact@v4.6.2
         with:
           name: Newman Report
-          path: newman/*.html
+          path: newman/**/*.html
 
-      - name: Creating GitHub Pages branch
+      - name: Publish report to GitHub Pages
         if: always()
         uses: peaceiris/actions-gh-pages@v4.0.0
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: newman/
 
-      - name: Send email notifications
+      - name: Send email notifications with link & attachment
         if: always()
         uses: dawidd6/action-send-mail@v6
         with:
@@ -56,9 +61,19 @@ jobs:
           server_port: 465
           username: ${{ secrets.EMAIL_USERNAME }}
           password: ${{ secrets.EMAIL_PASSWORD }}
-          subject: Pheonix In Warranty flow email notification
+          subject: Phoenix In Warranty flow email notification
           to: ${{ secrets.EMAIL_RECEIVER }}
           from: ${{ secrets.EMAIL_USERNAME }}
           body: |
             Hi,
-            Phoenix inwarranty flow tests have been executed. The report has been published and the URL is: git repourl
+
+            Phoenix inwarranty flow tests have been executed. 
+
+            📊 Newman HTML report has been published at:
+            👉 https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/${{ steps.timestamp.outputs.time }}/index.html
+
+            📎 The detailed HTML report is also attached with this email.
+
+            Regards,  
+            QA Automation Bot
+          attachments: newman/${{ steps.timestamp.outputs.time }}/index.html
