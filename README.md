@@ -22,11 +22,6 @@ This repository is a demonstration for POC for Integrating postman tests with gi
 7. GitHub Pages
 8. CSV for Data Driven Testing
 
-
-
-
-
-
 ## Project Structure ##
 ```
 Phoenix in warranty
@@ -43,10 +38,10 @@ You can run the project on your local machine, for that
 3. Install Nemann using ``` npm install -g newman ```
 4. Install Newman-reporter-htmlextra using ``` npm install -g newman-reporter-htmlextra ```
 5. Run the Newman command:
-   ```
+```
    newman run 'Inwarranty-flow Collection.postman_collection.json' \
    -e QA.postman_environment.json \
    -d testdata.csv \
    -r cli,htmlextra \
    --reporter-htmlextra-export ./newman/index.html
-  ```
+```
