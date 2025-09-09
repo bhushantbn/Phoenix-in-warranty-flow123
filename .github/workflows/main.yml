@@ -1,0 +1,68 @@
+name : Postman Collection Workflow
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+  schedule:
+    - cron : 30 02 * * 1-5 #8 am IST
+    - cron : 00 14 * * * #7:30 pm IST
+jobs:
+  run-postman-tests:
+    runs-on: ec2-github-runner
+
+    steps:
+    
+      - name: Checkout The Code
+        uses: actions/checkout@v4.2.2
+
+      - name: Install Nopejs and npm
+        uses: actions/setup-node@v3.9.1
+        with:
+          node-version: '22'
+      - name: Install newman and html extra globally
+        run: |
+             npm install -g newman
+             npm install -g newman-reporter-htmlextra
+
+      - name: Run Postman Collection with newman
+        run: |
+             newman run 'Inwarranty-flow Collection.postman_collection.json' \
+             -e QA.postman_environment.json \
+             -d testdata.csv \
+             -r cli,htmlextra \
+             --reporter-htmlextra-export ./newman/index.html
+
+      - name: Newman Report
+        if: always() #Ensures archive is executed irrespective of previous step's result
+        uses: actions/upload-artifact@v4.6.2
+        with:
+         name: Newman Report
+         path: newman/*.html
+
+      - name: Creating git hub page branch
+        if: always()
+        uses: peaceiris/actions-gh-pages@v4.0.0
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: newman/
+
+      - name: Send email notifications
+        if: always()
+        uses: dawidd6/action-send-mail@v6
+        with:
+         server_address: smtp.gmail.com
+         server_port: 465
+         username: ${{ secrets.EMAIL_USERNAME }}
+         password: ${{ secrets.EMAIL_PASSWORD }}
+         subject: Pheonix In Warranty flow email notification
+         to: kstvds61@gmail.com
+         from: ${{ secrets.EMAIL_USERNAME }}
+         body: |
+               Hi,
+               Phoenix inwarranty flow tests has been executed. The report has been published and the URL
+               is: https://kstvds24.github.io/Phoenix-in-warranty-flow/
+         
+        
+
+          
