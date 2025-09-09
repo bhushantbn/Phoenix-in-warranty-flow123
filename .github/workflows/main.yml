@@ -49,17 +49,23 @@ jobs:
             -r cli,htmlextra \
             --reporter-htmlextra-export ./newman/${{ steps.timestamp.outputs.time }}/index.html
 
-      - name: Copy latest report to root (for root URL)
-        run: cp newman/${{ steps.timestamp.outputs.time }}/index.html newman/index.html
+      - name: Prepare Pages artifact
+        run: |
+          # Create folder for GitHub Pages
+          mkdir -p pages
+          # Copy latest report to root of pages
+          cp newman/${{ steps.timestamp.outputs.time }}/index.html pages/index.html
+          # Also copy all timestamped reports (optional)
+          cp -r newman/* pages/
 
       - name: Upload Pages artifact
         if: always()
         uses: actions/upload-pages-artifact@v3
         with:
-          path: newman
+          path: pages
 
   deploy:
-    if: always()   # ✅ make sure it never skips
+    if: always()
     needs: build
     runs-on: ubuntu-latest
     environment:
