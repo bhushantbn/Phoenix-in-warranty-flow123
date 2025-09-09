@@ -2,9 +2,7 @@ name: Postman Collection Workflow
 
 on:
   push:
-    branches: [master, main]
-  pull_request:
-    branches: [master, main]
+    branches: [master]
   workflow_dispatch:
     inputs:
       environment:
@@ -25,23 +23,21 @@ permissions:
   pages: write
   id-token: write
   issues: write
-  pull-requests: write
 
 concurrency:
   group: "pages"
   cancel-in-progress: false
 
 env:
-  NODE_VERSION: "20"
-  NEWMAN_VERSION: "latest"
-  HTMLEXTRA_VERSION: "latest"
+  NODE_VERSION: "22"
 
 jobs:
-  test:
+  build:
     runs-on: ubuntu-latest
     outputs:
       report_time: ${{ steps.timestamp.outputs.time }}
       test_status: ${{ steps.newman.outcome }}
+      environment: ${{ steps.env.outputs.environment }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -49,14 +45,13 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: ${{ env.NODE_VERSION }}
+          node-version: 22
           cache: 'npm'
 
-      - name: Install newman and reporters
+      - name: Install newman + htmlextra
         run: |
-          npm install -g newman@${{ env.NEWMAN_VERSION }}
-          npm install -g newman-reporter-htmlextra@${{ env.HTMLEXTRA_VERSION }}
-          npm install -g newman-reporter-json
+          npm install -g newman
+          npm install -g newman-reporter-htmlextra
 
       - name: Create timestamp
         id: timestamp
@@ -83,9 +78,6 @@ jobs:
             echo "Error: Environment file not found"
             exit 1
           fi
-          if [ ! -f "testdata.csv" ]; then
-            echo "Warning: Test data file not found"
-          fi
 
       - name: Run Postman Collection
         id: newman
@@ -93,47 +85,15 @@ jobs:
         run: |
           mkdir -p newman/${{ steps.timestamp.outputs.time }}
           
-          # Build newman command
-          NEWMAN_CMD="newman run 'Inwarranty-flow Collection.postman_collection.json' \
+          newman run 'Inwarranty-flow Collection.postman_collection.json' \
             -e '${{ steps.env.outputs.environment }}.postman_environment.json' \
-            -r cli,htmlextra,json \
+            -d testdata.csv \
+            -r cli,htmlextra \
             --reporter-htmlextra-export ./newman/${{ steps.timestamp.outputs.time }}/index.html \
-            --reporter-json-export ./newman/${{ steps.timestamp.outputs.time }}/results.json \
             --reporter-htmlextra-title 'API Test Report - ${{ steps.env.outputs.environment }}' \
             --reporter-htmlextra-logs \
-            --reporter-htmlextra-showOnlyFails \
             --color on \
-            --timeout-request 30000 \
-            --timeout-script 60000"
-          
-          # Add test data if file exists
-          if [ -f "testdata.csv" ]; then
-            NEWMAN_CMD="$NEWMAN_CMD -d testdata.csv"
-          fi
-          
-          # Execute newman command
-          eval $NEWMAN_CMD
-
-      - name: Parse test results
-        id: results
-        if: always()
-        run: |
-          if [ -f "./newman/${{ steps.timestamp.outputs.time }}/results.json" ]; then
-            # Extract key metrics from JSON report
-            TOTAL_TESTS=$(jq '.run.stats.tests.total' ./newman/${{ steps.timestamp.outputs.time }}/results.json)
-            FAILED_TESTS=$(jq '.run.stats.tests.failed' ./newman/${{ steps.timestamp.outputs.time }}/results.json)
-            PASSED_TESTS=$(jq '.run.stats.tests.passed' ./newman/${{ steps.timestamp.outputs.time }}/results.json)
-            
-            echo "total_tests=$TOTAL_TESTS" >> $GITHUB_OUTPUT
-            echo "failed_tests=$FAILED_TESTS" >> $GITHUB_OUTPUT
-            echo "passed_tests=$PASSED_TESTS" >> $GITHUB_OUTPUT
-            echo "success_rate=$(( (PASSED_TESTS * 100) / TOTAL_TESTS ))%" >> $GITHUB_OUTPUT
-          else
-            echo "total_tests=0" >> $GITHUB_OUTPUT
-            echo "failed_tests=0" >> $GITHUB_OUTPUT
-            echo "passed_tests=0" >> $GITHUB_OUTPUT
-            echo "success_rate=0%" >> $GITHUB_OUTPUT
-          fi
+            --timeout-request 30000
 
       - name: Create summary report
         if: always()
@@ -145,68 +105,24 @@ jobs:
           **Execution Time:** ${{ steps.timestamp.outputs.readable_time }}  
           **Status:** ${{ steps.newman.outcome == 'success' && '✅ Passed' || '❌ Failed' }}
           
-          ### 📊 Test Statistics
-          - **Total Tests:** ${{ steps.results.outputs.total_tests }}
-          - **Passed:** ${{ steps.results.outputs.passed_tests }}
-          - **Failed:** ${{ steps.results.outputs.failed_tests }}
-          - **Success Rate:** ${{ steps.results.outputs.success_rate }}
-          
           ### 📄 Reports
-          - [📈 Detailed HTML Report](https://pages.github.io/${{ github.repository }})
+          - [📈 Detailed HTML Report](https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }})
           EOF
 
       - name: Prepare Pages artifact
-        if: always()
         run: |
           mkdir -p pages
-          
-          # Create index page with report listing
-          cat > pages/index.html << 'EOF'
-          <!DOCTYPE html>
-          <html>
-          <head>
-              <title>API Test Reports</title>
-              <style>
-                  body { font-family: Arial, sans-serif; margin: 40px; }
-                  .header { background: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 30px; }
-                  .report-list { list-style: none; padding: 0; }
-                  .report-item { background: white; border: 1px solid #ddd; margin: 10px 0; padding: 15px; border-radius: 5px; }
-                  .status-pass { color: #28a745; }
-                  .status-fail { color: #dc3545; }
-              </style>
-          </head>
-          <body>
-              <div class="header">
-                  <h1>🧪 API Test Reports</h1>
-                  <p>Latest test execution results for Inwarranty Flow API</p>
-              </div>
-          EOF
-          
-          # Add latest report info
-          echo "<div class='report-item'>" >> pages/index.html
-          echo "<h3>Latest Report - ${{ steps.timestamp.outputs.readable_time }}</h3>" >> pages/index.html
-          echo "<p><strong>Environment:</strong> ${{ steps.env.outputs.environment }}</p>" >> pages/index.html
-          echo "<p><strong>Status:</strong> <span class='status-${{ steps.newman.outcome == 'success' && 'pass' || 'fail' }}'>${{ steps.newman.outcome == 'success' && '✅ Passed' || '❌ Failed' }}</span></p>" >> pages/index.html
-          echo "<p><strong>Tests:</strong> ${{ steps.results.outputs.passed_tests }}/${{ steps.results.outputs.total_tests }} passed (${{ steps.results.outputs.success_rate }})</p>" >> pages/index.html
-          echo "<a href='reports/${{ steps.timestamp.outputs.time }}/index.html' style='background:#007bff;color:white;padding:8px 16px;text-decoration:none;border-radius:4px;'>📄 View Detailed Report</a>" >> pages/index.html
-          echo "</div>" >> pages/index.html
-          
-          # Close HTML
-          echo "</body></html>" >> pages/index.html
-          
-          # Copy all reports to pages
-          mkdir -p pages/reports
-          if [ -d "newman" ]; then
-            cp -r newman/* pages/reports/
-          fi
+          # Latest report as index.html
+          cp newman/${{ steps.timestamp.outputs.time }}/index.html pages/index.html
+          # Optional: copy all timestamped reports
+          cp -r newman/* pages/
 
       - name: Upload Pages artifact
-        if: always()
         uses: actions/upload-pages-artifact@v3
         with:
           path: pages
 
-      - name: Create issue on test failure
+      - name: Create issue on failure
         if: failure() && (github.event_name == 'schedule' || github.event_name == 'push')
         uses: actions/github-script@v7
         with:
@@ -220,45 +136,37 @@ jobs:
               **Environment:** ${{ steps.env.outputs.environment }}
               **Execution Time:** ${{ steps.timestamp.outputs.readable_time }}
               **Trigger:** ${{ github.event_name }}
-              **Workflow Run:** [#${{ github.run_number }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
-              
-              ### Test Results
-              - **Total Tests:** ${{ steps.results.outputs.total_tests }}
-              - **Failed Tests:** ${{ steps.results.outputs.failed_tests }}
-              - **Success Rate:** ${{ steps.results.outputs.success_rate }}
+              **Workflow Run:** [View Details](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
               
               ### Next Steps
-              1. Review the [detailed test report](${{ github.server_url }}/${{ github.repository }}/pages)
-              2. Check the workflow logs for specific error details
-              3. Investigate and fix the failing tests
-              4. Re-run the workflow to verify fixes
+              1. Review the [test report](${{ github.server_url }}/${{ github.repository }}/pages)
+              2. Check workflow logs for error details
+              3. Fix failing tests and re-run workflow
               
-              *This issue was automatically created by the API testing workflow.*`,
+              *This issue was created automatically by the API testing workflow.*`,
               labels: ['bug', 'api-test-failure', 'automated']
             });
 
   deploy:
-    needs: test
+    needs: build
     runs-on: ubuntu-latest
     if: always()
     environment:
       name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - name: Deploy to GitHub Pages
-        id: deployment
         uses: actions/deploy-pages@v4
 
   notify:
-    needs: [test, deploy]
+    needs: [build, deploy]
     runs-on: ubuntu-latest
-    if: always() && (github.event_name == 'schedule')
+    if: always() && github.event_name == 'schedule'
     steps:
       - name: Send notification
         run: |
-          echo "API Test Summary:"
-          echo "Environment: ${{ needs.test.outputs.environment }}"
-          echo "Status: ${{ needs.test.outputs.test_status }}"
-          echo "Tests: ${{ needs.test.outputs.passed_tests }}/${{ needs.test.outputs.total_tests }} (${{ needs.test.outputs.success_rate }})"
-          echo "Report URL: ${{ needs.deploy.outputs.page_url }}"
+          echo "📊 API Test Summary:"
+          echo "Environment: ${{ needs.build.outputs.environment }}"
+          echo "Status: ${{ needs.build.outputs.test_status }}"
+          echo "Time: ${{ needs.build.outputs.report_time }}"
+          echo "Report: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}"
           # Add your notification logic here (Slack, Teams, Email, etc.)
