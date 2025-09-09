@@ -44,6 +44,9 @@ jobs:
             -r cli,htmlextra \
             --reporter-htmlextra-export ./newman/${{ steps.timestamp.outputs.time }}/index.html
 
+      - name: Copy latest report to root
+        run: cp newman/${{ steps.timestamp.outputs.time }}/index.html newman/index.html
+
       - name: Upload report as artifact
         if: always()
         uses: actions/upload-artifact@v4.6.2
@@ -75,8 +78,9 @@ jobs:
 
             Phoenix inwarranty flow tests have been executed.
 
-            📊 Newman HTML report has been published at:
-            👉 https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/${{ steps.timestamp.outputs.time }}/index.html
+            📊 Newman HTML reports:
+            👉 Latest Report: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/
+            👉 Timestamped Report: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/${{ steps.timestamp.outputs.time }}/index.html
 
             📎 The detailed HTML report is also attached with this email.
 
