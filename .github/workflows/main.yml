@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
   schedule:
     - cron: "30 02 * * 1-5" # 8 am IST
-    - cron: "00 14 * * *"   # 7:30 pm IST
+    - cron: "00 14 * * *" # 7:30 pm IST
 
 permissions:
   contents: read
@@ -68,5 +68,8 @@ jobs:
     environment:
       name: github-pages
     steps:
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
       - name: Deploy to GitHub Pages
         uses: actions/deploy-pages@v4
