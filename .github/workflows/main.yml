@@ -6,10 +6,10 @@ on:
   workflow_dispatch:
   schedule:
     - cron: "30 02 * * 1-5" # 8 am IST
-    - cron: "00 14 * * *" # 7:30 pm IST
+    - cron: "00 14 * * *"   # 7:30 pm IST
 
 permissions:
-  contents: read # ok for upload-pages-artifact
+  contents: read
   pages: write
   id-token: write
 
@@ -49,23 +49,17 @@ jobs:
             -r cli,htmlextra \
             --reporter-htmlextra-export ./newman/${{ steps.timestamp.outputs.time }}/index.html
 
-      - name: Copy latest report to root (so root URL shows latest)
+      - name: Copy latest report to root (for root URL)
         run: cp newman/${{ steps.timestamp.outputs.time }}/index.html newman/index.html
 
-      - name: Upload report as workflow artifact (for download later)
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: newman-report
-          path: newman/**/*.html
-
-      - name: Upload pages artifact (for GitHub Pages deploy)
+      - name: Upload Pages artifact
         if: always()
         uses: actions/upload-pages-artifact@v3
         with:
           path: newman
 
   deploy:
+    if: always()   # ✅ make sure it never skips
     needs: build
     runs-on: ubuntu-latest
     environment:
@@ -75,34 +69,3 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
-
-      - name: Download Newman artifact for email attachment
-        uses: actions/download-artifact@v4
-        with:
-          name: newman-report
-          path: newman-download
-
-      - name: Send email with report link + attachment
-        if: always()
-        uses: dawidd6/action-send-mail@v6
-        with:
-          server_address: smtp.gmail.com
-          server_port: 465
-          username: ${{ secrets.EMAIL_USERNAME }}
-          password: ${{ secrets.EMAIL_PASSWORD }}
-          subject: Phoenix In Warranty flow - Test Report
-          to: ${{ secrets.EMAIL_RECEIVER }}
-          from: ${{ secrets.EMAIL_USERNAME }}
-          body: |
-            Hi,
-
-            Phoenix inwarranty flow tests have been executed.
-
-            Latest (root) report: ${{ steps.deployment.outputs.page_url }}
-            Timestamped report: ${{ steps.deployment.outputs.page_url }}${{ needs.build.outputs.report_time }}/index.html
-
-            The detailed HTML report is attached.
-
-            Regards,
-            QA Automation Bot
-          attachments: newman-download/${{ needs.build.outputs.report_time }}/index.html
