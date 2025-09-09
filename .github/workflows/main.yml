@@ -6,25 +6,30 @@ on:
   workflow_dispatch:
   schedule:
     - cron: "30 02 * * 1-5" # 8 am IST
-    - cron: "00 14 * * *"   # 7:30 pm IST
+    - cron: "00 14 * * *" # 7:30 pm IST
 
 permissions:
-  contents: write   # required for gh-pages
+  contents: read # ok for upload-pages-artifact
   pages: write
   id-token: write
 
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
 jobs:
-  run-postman-tests:
+  build:
     runs-on: ubuntu-latest
-
+    outputs:
+      report_time: ${{ steps.timestamp.outputs.time }}
     steps:
-      - name: Checkout The Code
-        uses: actions/checkout@v4.2.2
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - name: Install Node.js
-        uses: actions/setup-node@v3.9.1
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
         with:
-          node-version: '22'
+          node-version: "22"
 
       - name: Install newman + htmlextra
         run: |
@@ -44,23 +49,38 @@ jobs:
             -r cli,htmlextra \
             --reporter-htmlextra-export ./newman/${{ steps.timestamp.outputs.time }}/index.html
 
-      - name: Copy latest report to root
+      - name: Copy latest report to root (so root URL shows latest)
         run: cp newman/${{ steps.timestamp.outputs.time }}/index.html newman/index.html
 
-      - name: Upload report as artifact
+      - name: Upload report as workflow artifact (for download later)
         if: always()
-        uses: actions/upload-artifact@v4.6.2
+        uses: actions/upload-artifact@v4
         with:
-          name: Newman Report
+          name: newman-report
           path: newman/**/*.html
 
-      - name: Publish report to GitHub Pages
+      - name: Upload pages artifact (for GitHub Pages deploy)
         if: always()
-        uses: peaceiris/actions-gh-pages@v4.0.0
+        uses: actions/upload-pages-artifact@v3
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_branch: gh-pages
-          publish_dir: newman/
+          path: newman
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+      - name: Download Newman artifact for email attachment
+        uses: actions/download-artifact@v4
+        with:
+          name: newman-report
+          path: newman-download
 
       - name: Send email with report link + attachment
         if: always()
@@ -78,12 +98,11 @@ jobs:
 
             Phoenix inwarranty flow tests have been executed.
 
-            📊 Newman HTML reports:
-            👉 Latest Report: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/
-            👉 Timestamped Report: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/${{ steps.timestamp.outputs.time }}/index.html
+            Latest (root) report: ${{ steps.deployment.outputs.page_url }}
+            Timestamped report: ${{ steps.deployment.outputs.page_url }}${{ needs.build.outputs.report_time }}/index.html
 
-            📎 The detailed HTML report is also attached with this email.
+            The detailed HTML report is attached.
 
             Regards,
             QA Automation Bot
-          attachments: newman/${{ steps.timestamp.outputs.time }}/index.html
+          attachments: newman-download/${{ needs.build.outputs.report_time }}/index.html
