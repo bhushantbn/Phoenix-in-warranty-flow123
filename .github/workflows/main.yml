@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
   schedule:
     - cron: "30 02 * * 1-5" # 8 am IST
-    - cron: "00 14 * * *" # 7:30 pm IST
+    - cron: "00 14 * * *"   # 7:30 pm IST
 
 permissions:
   contents: read
@@ -52,10 +52,11 @@ jobs:
       - name: Prepare Pages artifact
         run: |
           mkdir -p pages
-          # Latest report as index.html
-          cp newman/${{ steps.timestamp.outputs.time }}/index.html pages/index.html
-          # Optional: copy all timestamped reports
+          cp newman/${{ steps.timestamp.outputs.time}}/index.html pages/index.html
           cp -r newman/* pages/
+
+      - name: Debug - List files in pages
+        run: ls -R pages
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
