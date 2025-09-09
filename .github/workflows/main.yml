@@ -2,7 +2,7 @@ name: Postman Collection Workflow
 
 on:
   push:
-    branches: [master]
+    branches: [master, main]
   workflow_dispatch:
     inputs:
       environment:
@@ -45,7 +45,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
 
       - name: Install newman + htmlextra
@@ -110,12 +110,39 @@ jobs:
           EOF
 
       - name: Prepare Pages artifact
+        if: always()
         run: |
+          echo "Preparing Pages artifact..."
           mkdir -p pages
-          # Latest report as index.html
-          cp newman/${{ steps.timestamp.outputs.time }}/index.html pages/index.html
-          # Optional: copy all timestamped reports
-          cp -r newman/* pages/
+          
+          # Check if report exists
+          if [ -f "newman/${{ steps.timestamp.outputs.time }}/index.html" ]; then
+            echo "Copying latest report as index.html..."
+            cp newman/${{ steps.timestamp.outputs.time }}/index.html pages/index.html
+            echo "Copying all timestamped reports..."
+            cp -r newman/* pages/
+            echo "✅ Pages artifact prepared successfully"
+            
+            # List contents for debugging
+            echo "Pages directory contents:"
+            find pages -type f -name "*.html" | head -10
+          else
+            echo "❌ No report found to copy"
+            echo "Creating placeholder index.html..."
+            cat > pages/index.html << 'EOF'
+          <!DOCTYPE html>
+          <html>
+          <head>
+              <title>Test Report - No Results</title>
+          </head>
+          <body>
+              <h1>Test Execution Failed</h1>
+              <p>No test report was generated. Please check the workflow logs for details.</p>
+              <p>Timestamp: ${{ steps.timestamp.outputs.time }}</p>
+          </body>
+          </html>
+          EOF
+          fi
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
