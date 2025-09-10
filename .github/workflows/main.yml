@@ -1,19 +1,22 @@
-name: Postman Collection Workflow   # name of the workflow
+name: Postman Collection Workflow
 
 on:
-  push:   # Run workflow on push to master branch
+  push:
     branches: [master]
-
-  workflow_dispatch: # manual trigger
-
-  schedule:   # scheduling cron jobs to run on VM
+  workflow_dispatch:
+  schedule:
     - cron: "30 02 * * *"    # 8:00 AM IST everyday
     - cron: "00 14 * * *"    # 7:30 PM IST everyday
     - cron: "00 06 * * 1-5"  # 11:30 AM IST Mon–Fri
 
+permissions:
+  contents: write
+  pages: write       # Required for Pages
+  id-token: write    # Required for Pages
+
 jobs:
-  run_postman_tests:            # Job Name
-    runs-on: ubuntu-latest      # Run workflow on ubuntu latest VM
+  run_postman_tests:
+    runs-on: ubuntu-latest
 
     steps:
       - name: Checkout repository
@@ -29,34 +32,26 @@ jobs:
           npm install -g newman
           npm install -g newman-reporter-htmlextra
 
-      - name: Run Postman collection on VM (Ubuntu) 
+      - name: Run Postman collection on VM (Ubuntu)
         run: |
-          newman run Inwarranty_flow_Collection.postman_collection.json \
+          newman run In_Warranty_Newman_CLI2.postman_collection.json \
             -e QA.postman_environment.json \
             -d testdata.csv \
             -r cli,htmlextra \
             --reporter-htmlextra-export newman/index.html
 
-      - name: Upload HTML Report
-        if: always()  
-        uses: actions/upload-artifact@v4
+      - name: Upload report for GitHub Pages
+        uses: actions/upload-pages-artifact@v3
         with:
-          name: newman-report
-          path: newman/*.html
+          path: newman
 
-      - name: Send Email with Report
-        if: always()
-        uses: dawidd6/action-send-mail@v5
-        with:
-          server_address: smtp.gmail.com
-          server_port: 465
-          username: ${{ secrets.EMAIL_USERNAME }}
-          password: ${{ secrets.EMAIL_PASSWORD }}
-          subject: Phoenix In-Warranty Flow Test Execution Report
-          to: ${{ secrets.EMAIL_RECEIVER }}
-          from: ${{ secrets.EMAIL_USERNAME }}
-          body: |
-            Hi,
-            
-            Phoenix In-Warranty tests have been executed.
-            The Newman HTML report has been attached.
+  deploy:
+    runs-on: ubuntu-latest
+    needs: run_postman_tests
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
