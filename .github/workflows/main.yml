@@ -2,7 +2,7 @@ name: Postman Collection workflow   # name of the workflow
 
 on:
   push:   # pushing the workflow on main branch
-    branches: [main]
+    branches: [master]
 
   workflow_dispatch: # manual trigger
 
