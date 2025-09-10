@@ -1,65 +1,62 @@
-name: Postman Collection workflow   # name of the workflow
+name: Postman Collection Workflow   # name of the workflow
 
 on:
-  push:   # pushing the workflow on main branch
+  push:   # Run workflow on push to master branch
     branches: [master]
 
   workflow_dispatch: # manual trigger
 
-  schedule:   # scheduling cron jobs to run on Vm
-    - cron: "30 02 * * *"    # 8:00 AM IST everyda
+  schedule:   # scheduling cron jobs to run on VM
+    - cron: "30 02 * * *"    # 8:00 AM IST everyday
     - cron: "00 14 * * *"    # 7:30 PM IST everyday
     - cron: "00 06 * * 1-5"  # 11:30 AM IST Mon–Fri
 
 jobs:
-  Run_postman-tests:           # Job Name (MUST end with colon)
-    runs-on:  ubuntu-latest     # Run workflow on ubuntu latest VM
+  run_postman_tests:            # Job Name
+    runs-on: ubuntu-latest      # Run workflow on ubuntu latest VM
 
-    steps:                      # Steps to be followed while running the workflow
-      - name: checkout the postman collection    # copy data to git repository
-        uses: actions/checkout@v4.2.2   # installed from marketplace
-        
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-      - name: install nodejs and npm    
-        uses: actions/setup-node@v3.9.1
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
         with:
           node-version: '18'
 
-      - name: install newman and html-extra libraries
+      - name: Install Newman and reporter
         run: |
           npm install -g newman
           npm install -g newman-reporter-htmlextra
 
       - name: Run Postman collection on VM (Ubuntu) 
         run: |
-          newman run In_Warranty_Newman_CLI2.postman_collection \
+          newman run In_Warranty_Newman_CLI2.postman_collection.json \
             -e QA.postman_environment.json \
             -d testdata.csv \
             -r cli,htmlextra \
-            --reporter-htmlextra-export newman/index.html # index html report is stored 
+            --reporter-htmlextra-export newman/index.html
 
-      - name: upload html report
-        if: always()  # ensure the report is generated regardless of test results
-        uses: actions/upload-artifact@v4.6.2   # marketplace name upload a build artifact 
+      - name: Upload HTML Report
+        if: always()  
+        uses: actions/upload-artifact@v4
         with:
-          name: Newman Report 
+          name: newman-report
           path: newman/*.html
 
-      - name: Send auto email # marketplace name github pages action
+      - name: Send Email with Report
         if: always()
-        uses: dawidd6/action-send-mail@v5   # marketplace plugin
+        uses: dawidd6/action-send-mail@v5
         with:
           server_address: smtp.gmail.com
           server_port: 465
-          username: ${{ secrets.EMAIL_USERNAME}}  # added from settings secrets>> repository secrets
-          password: ${{ secrets.EMAIL_PASSWORD}}  # not gmail password use app password 
-          subject: Phoenix In warranty Flow Test Execution report email
-          to: ${{ secrets.EMAIL_RECEIVER}}   # added from settings secrets>> repository secrets
-          from: ${{ secrets.EMAIL_USERNAME}}
+          username: ${{ secrets.EMAIL_USERNAME }}
+          password: ${{ secrets.EMAIL_PASSWORD }}
+          subject: Phoenix In-Warranty Flow Test Execution Report
+          to: ${{ secrets.EMAIL_RECEIVER }}
+          from: ${{ secrets.EMAIL_USERNAME }}
           body: |
-                Hi,
-                Phoenix In warranty test has been executed . The Report has been published.
-               
-          
-          
-      
+            Hi,
+            
+            Phoenix In-Warranty tests have been executed.
+            The Newman HTML report has been attached.
