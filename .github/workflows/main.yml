@@ -34,7 +34,7 @@ jobs:
 
       - name: Run Postman collection on VM (Ubuntu)
         run: |
-          newman run In_Warranty_Newman_CLI2.postman_collection.json \
+          newman run Inwarranty_flow_Collection.postman_collection.json.json \
             -e QA.postman_environment.json \
             -d testdata.csv \
             -r cli,htmlextra \
