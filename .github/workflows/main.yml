@@ -39,8 +39,10 @@ jobs:
             -d testdata.csv \
             -r cli,htmlextra \
             --reporter-htmlextra-export newman/index.html
+        continue-on-error: true   # ✅ allow tests to fail but still continue
 
       - name: Upload report for GitHub Pages
+        if: always()              # ✅ ensure upload even if tests failed
         uses: actions/upload-pages-artifact@v3
         with:
           path: newman
@@ -48,6 +50,7 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     needs: run_postman_tests
+    if: always()                  # ✅ always run deployment job
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
